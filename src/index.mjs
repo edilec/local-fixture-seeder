@@ -14,6 +14,7 @@ export const RULE_SEVERITY = Object.freeze({
   'input-unreadable': 'warning',
   'input-unsafe': 'warning',
   'output-unsafe': 'warning',
+  'output-not-empty': 'warning',
   'write-refused': 'warning',
   'write-failed': 'warning',
 });
@@ -31,6 +32,7 @@ function finding(ruleId, pointer = '') {
     'input-unreadable': 'Named fixture configuration could not be read or parsed.',
     'input-unsafe': 'Named fixture configuration has unsafe provenance.',
     'output-unsafe': 'Named output directory has unsafe provenance.',
+    'output-not-empty': 'Named output directory is not empty; no generated file was written.',
     'write-refused': 'A generated destination is not safe to create.',
     'write-failed': 'Generated files could not all be created; inspect the output directory.',
   };
