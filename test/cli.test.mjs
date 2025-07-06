@@ -4,6 +4,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, readdirSync, symli
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 
 const bin = resolve('bin/local-fixture-seeder.mjs');
 const guard = resolve('support/deny-network.mjs');
@@ -33,6 +34,10 @@ test('real CLI writes deterministic synthetic files and a hash-bearing manifest'
     }
     const manifest = JSON.parse(readFileSync(join(first, 'out/reset-manifest.json'), 'utf8'));
     assert.deepEqual(manifest.artifacts.map(item => item.path), ['groups.json', 'items.json']);
+    for (const artifact of manifest.artifacts) {
+      const actual = createHash('sha256').update(readFileSync(join(first, 'out', artifact.path))).digest('hex');
+      assert.equal(artifact.sha256, actual);
+    }
   } finally { rmSync(first, { recursive: true, force: true }); rmSync(second, { recursive: true, force: true }); }
 });
 
@@ -75,7 +80,7 @@ test('help, JSON-only mode, and invalid configuration have distinct streams', ()
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
-test('named path, symlink escape, and root slash do not misstate provenance', () => {
+test('named paths and symlink escapes do not misstate provenance', () => {
   const root = setup();
   const outside = mkdtempSync(join(tmpdir(), 'fixture-outside-'));
   try {
@@ -90,6 +95,32 @@ test('named path, symlink escape, and root slash do not misstate provenance', ()
     assert.equal(escaped.status, 2);
     assert.equal(JSON.parse(escaped.stdout).status, 'incomplete');
     assert.deepEqual(readdirSync(join(root, 'out')), []);
+  } finally { rmSync(root, { recursive: true, force: true }); rmSync(outside, { recursive: true, force: true }); }
+});
+
+test('filesystem root permits a safe absolute input and output directory', () => {
+  const root = setup();
+  try {
+    const child = run('--root', '/', '--input', join(root, 'config.json'), '--out', join(root, 'out'), '--json');
+    assert.equal(child.status, 0, child.stderr);
+    assert.equal(JSON.parse(child.stdout).status, 'pass');
+    assert.equal(child.stderr, '');
+    assert.deepEqual(readdirSync(join(root, 'out')), ['groups.json', 'items.json', 'reset-manifest.json']);
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test('an output parent link outside the declared root is refused without touching outside files', () => {
+  const root = setup();
+  const outside = mkdtempSync(join(tmpdir(), 'fixture-parent-outside-'));
+  try {
+    mkdirSync(join(outside, 'out'));
+    writeFileSync(join(outside, 'out', 'unrelated.txt'), 'protected outside');
+    symlinkSync(outside, join(root, 'linked'));
+    const child = run('--root', root, '--input', 'config.json', '--out', 'linked/out');
+    assert.equal(child.status, 2);
+    assert.equal(JSON.parse(child.stdout).status, 'incomplete');
+    assert.equal(readFileSync(join(outside, 'out', 'unrelated.txt'), 'utf8'), 'protected outside');
+    assert.deepEqual(readdirSync(join(outside, 'out')), ['unrelated.txt']);
   } finally { rmSync(root, { recursive: true, force: true }); rmSync(outside, { recursive: true, force: true }); }
 });
 

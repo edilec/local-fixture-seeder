@@ -55,16 +55,37 @@ export function incompleteReport(ruleId, pointer = '', checked = 0) {
 function limitsFrom(value) {
   if (value === undefined) return DEFAULT_LIMITS;
   if (value === null || typeof value !== 'object' || Array.isArray(value)) throw new ConfigError('Invalid analysis limits.');
+  let keys;
+  let descriptors;
+  try {
+    if (![Object.prototype, null].includes(Object.getPrototypeOf(value))) throw new Error('Nonplain limits.');
+    keys = Reflect.ownKeys(value);
+    descriptors = Object.getOwnPropertyDescriptors(value);
+  } catch { throw new ConfigError('Invalid analysis limits.'); }
   const limits = { ...DEFAULT_LIMITS };
-  for (const key of Object.keys(value)) {
+  for (const key of keys) {
     if (!Object.hasOwn(DEFAULT_LIMITS, key)) throw new ConfigError('Unknown analysis limit.');
+    if (!Object.hasOwn(descriptors[key], 'value') || !descriptors[key].enumerable) throw new ConfigError('Invalid analysis limit.');
     const maximum = key === 'timeoutMs' ? 60000 : DEFAULT_LIMITS[key];
-    if (!Number.isSafeInteger(value[key]) || value[key] < 1 || value[key] > maximum) {
+    const item = descriptors[key].value;
+    if (!Number.isSafeInteger(item) || item < 1 || item > maximum) {
       throw new ConfigError('Invalid analysis limit.');
     }
-    limits[key] = value[key];
+    limits[key] = item;
   }
   return limits;
+}
+
+function snapshotProfile(value) {
+  try {
+    if (value === null || typeof value !== 'object' || Array.isArray(value)
+        || ![Object.prototype, null].includes(Object.getPrototypeOf(value))) return null;
+    const keys = Reflect.ownKeys(value);
+    if (keys.length !== 4 || keys.some(key => typeof key !== 'string')) return null;
+    const descriptors = Object.getOwnPropertyDescriptors(value);
+    if (keys.some(key => !Object.hasOwn(descriptors[key], 'value') || !descriptors[key].enumerable)) return null;
+    return Object.fromEntries(keys.map(key => [key, descriptors[key].value]));
+  } catch { return null; }
 }
 
 function profileCheck(profile, limits) {
@@ -104,10 +125,18 @@ function id(kind, ordinal, random) { return `${kind}-${String(ordinal).padStart(
 
 /** Pure, offline fixture construction. Files are only written by the explicit CLI. */
 export function buildFixtureSet(profile, options = {}) {
-  if (options === null || typeof options !== 'object' || Array.isArray(options)
-      || Object.keys(options).some(key => !['now', 'limits'].includes(key))) throw new ConfigError('Invalid generator options.');
-  const limits = limitsFrom(options.limits);
-  const now = options.now ?? Date.now;
+  let config;
+  try {
+    if (options === null || typeof options !== 'object' || Array.isArray(options)
+        || ![Object.prototype, null].includes(Object.getPrototypeOf(options))) throw new Error('Nonplain options.');
+    const keys = Reflect.ownKeys(options);
+    const descriptors = Object.getOwnPropertyDescriptors(options);
+    if (keys.some(key => !['now', 'limits'].includes(key)
+        || !Object.hasOwn(descriptors[key], 'value') || !descriptors[key].enumerable)) throw new Error('Unknown option.');
+    config = Object.fromEntries(keys.map(key => [key, descriptors[key].value]));
+  } catch { throw new ConfigError('Invalid generator options.'); }
+  const limits = limitsFrom(config.limits);
+  const now = config.now ?? Date.now;
   if (typeof now !== 'function') throw new ConfigError('Invalid analysis clock.');
   let previous;
   const readClock = () => {
@@ -119,19 +148,20 @@ export function buildFixtureSet(profile, options = {}) {
     return value;
   };
   const start = readClock();
-  const invalid = profileCheck(profile, limits);
+  const safeProfile = snapshotProfile(profile);
+  const invalid = profileCheck(safeProfile, limits);
   if (invalid) return { report: incompleteReport(...invalid), artifacts: [] };
-  const next = generator(profile.seed);
+  const next = generator(safeProfile.seed);
   const groups = [];
   const items = [];
   const timedOut = () => readClock() - start > limits.timeoutMs;
-  for (let groupIndex = 1; groupIndex <= profile.groups; groupIndex++) {
+  for (let groupIndex = 1; groupIndex <= safeProfile.groups; groupIndex++) {
     if (timedOut()) return { report: incompleteReport('analysis-timeout', '', groups.length + items.length), artifacts: [] };
     const groupId = id('group', groupIndex, next());
     groups.push({ id: groupId, label: `Synthetic group ${groupIndex}` });
-    for (let itemIndex = 1; itemIndex <= profile.itemsPerGroup; itemIndex++) {
+    for (let itemIndex = 1; itemIndex <= safeProfile.itemsPerGroup; itemIndex++) {
       if (timedOut()) return { report: incompleteReport('analysis-timeout', '', groups.length + items.length), artifacts: [] };
-      const ordinal = (groupIndex - 1) * profile.itemsPerGroup + itemIndex;
+      const ordinal = (groupIndex - 1) * safeProfile.itemsPerGroup + itemIndex;
       items.push({ id: id('item', ordinal, next()), groupId, label: `Synthetic item ${ordinal}` });
     }
   }

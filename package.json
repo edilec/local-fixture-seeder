@@ -1,13 +1,18 @@
 {
   "name": "local-fixture-seeder",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "Seed local fixtures with deterministic data and documented reset behavior.",
   "type": "module",
+  "bin": {
+    "local-fixture-seeder": "./bin/local-fixture-seeder.mjs"
+  },
   "engines": {
     "node": ">=22"
   },
   "scripts": {
-    "test": "node --test"
+    "lint": "node --check src/index.mjs && node --check src/json.mjs && node --check src/write-guard.mjs && node --check src/write.mjs && node --check bin/local-fixture-seeder.mjs && node --check support/deny-network.mjs",
+    "test": "node --import ./support/deny-network.mjs --test",
+    "check": "npm run lint && npm test"
   },
   "license": "MIT",
   "repository": {
