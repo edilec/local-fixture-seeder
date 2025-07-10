@@ -98,6 +98,33 @@ test('named paths and symlink escapes do not misstate provenance', () => {
   } finally { rmSync(root, { recursive: true, force: true }); rmSync(outside, { recursive: true, force: true }); }
 });
 
+test('an in-root input symlink is refused while the real input succeeds', () => {
+  const root = setup();
+  try {
+    symlinkSync('config.json', join(root, 'alias.json'));
+    const alias = run('--root', root, '--input', 'alias.json', '--out', 'out');
+    assert.equal(alias.status, 2);
+    assert.deepEqual(JSON.parse(alias.stdout).findings.map(item => item.ruleId), ['input-unsafe']);
+    assert.deepEqual(readdirSync(join(root, 'out')), []);
+    const real = run('--root', root, '--input', 'config.json', '--out', 'out');
+    assert.equal(real.status, 0);
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test('a linked input parent outside root is refused without reading external bytes', () => {
+  const root = setup();
+  const outside = mkdtempSync(join(tmpdir(), 'fixture-input-outside-'));
+  try {
+    writeFileSync(join(outside, 'config.json'), 'token=SYNTHETIC_SECRET_CANARY');
+    symlinkSync(outside, join(root, 'linked'));
+    const child = run('--root', root, '--input', 'linked/config.json', '--out', 'out');
+    assert.equal(child.status, 2);
+    assert.deepEqual(JSON.parse(child.stdout).findings.map(item => item.ruleId), ['input-unsafe']);
+    assert.equal((child.stdout + child.stderr).includes('SYNTHETIC_SECRET_CANARY'), false);
+    assert.deepEqual(readdirSync(join(root, 'out')), []);
+  } finally { rmSync(root, { recursive: true, force: true }); rmSync(outside, { recursive: true, force: true }); }
+});
+
 test('filesystem root permits a safe absolute input and output directory', () => {
   const root = setup();
   try {

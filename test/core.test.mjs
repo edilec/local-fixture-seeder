@@ -14,6 +14,8 @@ test('a zero-seed clean set is deterministic and every item names one generated 
   assert.equal(first.report.summary.checked, 8);
   assert.deepEqual(names(first), ['groups.json', 'items.json', 'reset-manifest.json']);
   assert.deepEqual(first.artifacts, second.artifacts);
+  assert.notEqual(first.artifacts[0].bytes,
+    buildFixtureSet(valid({ seed: 1 }), { now: () => 0 }).artifacts[0].bytes);
   const groups = json(first, 'groups.json');
   const items = json(first, 'items.json');
   assert.equal(new Set(groups.map(item => item.id)).size, 2);

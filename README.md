@@ -77,9 +77,11 @@ root. Destinations are checked for symlinks, symlinked-parent escape, hard-link
 identity to inspected inputs, and dangling named-input aliases before writing.
 Files are opened with exclusive creation and no-follow flags. An existing
 unrelated file is never removed or overwritten. A failed/interrupted write may
-leave one or two data files and **no complete manifest**; inspect the directory
-and choose a fresh empty destination rather than treating a partial run as a
-reset list. As with any path preflight, this does not defend against a hostile
+leave data files and even a partially written manifest filename. The report is
+incomplete, and the manifest must parse and match the actual hashes before it
+can be treated as a complete inventory. Inspect the directory and choose a
+fresh empty destination rather than treating a partial run as a reset list.
+As with any path preflight, this does not defend against a hostile
 process concurrently replacing parent directories between checks and opens.
 
 ## Non-goals and development

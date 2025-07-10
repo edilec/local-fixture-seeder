@@ -25,8 +25,10 @@ emitted in the report.
 names, their SHA-256 hashes, and record counts. The manifest is an inventory
 for a human to inspect; it is not a deletion instruction or reset operation.
 The CLI never deletes or replaces files. An interrupted write can leave a
-partial directory with no manifest; the report is incomplete and the caller
-must inspect it before retrying in a new empty directory.
+partial directory, including a partially written manifest filename. The
+report is incomplete; a manifest is not trustworthy until it parses and its
+hashes match the data files. The caller must inspect the directory before
+retrying in a new empty destination.
 
 ## Paths and outcomes
 
