@@ -12,13 +12,16 @@ test('direct guard reaches destination symlink, parent symlink and input hard-li
     const input = join(root, 'input.json');
     writeFileSync(input, 'original input');
     symlinkSync(input, join(root, 'destination.json'));
-    await assert.rejects(assertWritableDestination(join(root, 'destination.json'), { root, inputs: [input] }), DestinationError);
+    await assert.rejects(assertWritableDestination(join(root, 'destination.json'), { root, inputs: [input] }),
+      error => error instanceof DestinationError && /symbolic link/u.test(error.message));
     assert.equal(readFileSync(input, 'utf8'), 'original input');
     symlinkSync(outside, join(root, 'linked-parent'));
-    await assert.rejects(assertWritableDestination(join(root, 'linked-parent', 'destination.json'), { root, inputs: [input] }), DestinationError);
+    await assert.rejects(assertWritableDestination(join(root, 'linked-parent', 'destination.json'), { root, inputs: [input] }),
+      error => error instanceof DestinationError && /outside the permitted root/u.test(error.message));
     assert.equal(readFileSync(input, 'utf8'), 'original input');
     linkSync(input, join(root, 'hard-link.json'));
-    await assert.rejects(assertWritableDestination(join(root, 'hard-link.json'), { root, inputs: [input] }), DestinationError);
+    await assert.rejects(assertWritableDestination(join(root, 'hard-link.json'), { root, inputs: [input] }),
+      error => error instanceof DestinationError && /same file as an input/u.test(error.message));
     assert.equal(readFileSync(input, 'utf8'), 'original input');
     assert.equal(readFileSync(join(root, 'hard-link.json'), 'utf8'), 'original input');
   } finally {
